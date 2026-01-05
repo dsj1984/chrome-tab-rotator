@@ -196,6 +196,15 @@ async function rotateToNextUrl() {
     const nextIndex = (state.currentIndex + 1) % config.urls.length;
     const nextUrlEntry = config.urls[nextIndex];
 
+    // Send fade-out message to content script for smooth transition (non-blocking)
+    try {
+        await chrome.tabs.sendMessage(state.tabId, { action: 'fadeOut' });
+        console.log('Fade-out complete');
+    } catch (e) {
+        // Content script may not be loaded (e.g., chrome:// pages, new tabs)
+        console.log('Could not send fade message (expected on some pages)');
+    }
+
     try {
         // Navigate to the new URL
         await chrome.tabs.update(state.tabId, { url: nextUrlEntry.url });
