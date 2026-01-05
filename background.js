@@ -7,7 +7,9 @@
 import { DEFAULT_CONFIG, CONFIG_STORAGE_KEY } from './config.js';
 
 const ALARM_NAME = 'tab-rotator-alarm';
+const STARTUP_ALARM_NAME = 'tab-rotator-startup';
 const STATE_STORAGE_KEY = 'rotatorState';
+const INITIALIZED_KEY = 'rotatorInitialized';
 
 /**
  * Get the current configuration from storage, falling back to defaults
@@ -228,11 +230,79 @@ async function rotateToNextUrl() {
 }
 
 /**
+ * Check if we should auto-initialize on this session
+ * Returns true if this is a new browser session and auto-start is enabled
+ */
+async function shouldAutoInitialize() {
+    const config = await getConfig();
+    if (!config.autoStartOnBrowserLaunch) {
+        return false;
+    }
+
+    const state = await getState();
+    // Don't initialize if we already have an active window
+    if (await windowExists(state.windowId)) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * Handle alarm events
  */
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === ALARM_NAME) {
         rotateToNextUrl();
+    } else if (alarm.name === STARTUP_ALARM_NAME) {
+        // Delayed startup - give Chrome time to fully load
+        console.log('Startup alarm fired - initializing dashboard');
+        if (await shouldAutoInitialize()) {
+            await initializeDashboard();
+        }
+    }
+});
+
+/**
+ * Handle window creation events - this is more reliable than onStartup
+ * for detecting browser launch
+ */
+chrome.windows.onCreated.addListener(async (window) => {
+    console.log('Window created:', window.id, 'type:', window.type);
+
+    // Handle both normal windows and popup/app windows
+    if (window.type !== 'normal' && window.type !== 'popup') {
+        return;
+    }
+
+    // Check if we should auto-initialize
+    if (await shouldAutoInitialize()) {
+        console.log('Auto-start triggered by window creation');
+
+        // Small delay to let the window fully load
+        await chrome.alarms.clear(STARTUP_ALARM_NAME);
+        await chrome.alarms.create(STARTUP_ALARM_NAME, {
+            delayInMinutes: 0.05 // ~3 seconds
+        });
+    }
+});
+
+/**
+ * Handle tab creation events - additional trigger for app mode
+ * This fires even when Chrome launches with --app flag
+ */
+chrome.tabs.onCreated.addListener(async (tab) => {
+    console.log('Tab created:', tab.id, 'windowId:', tab.windowId);
+
+    // Check if we should auto-initialize
+    if (await shouldAutoInitialize()) {
+        console.log('Auto-start triggered by tab creation');
+
+        // Small delay to let the tab fully load
+        await chrome.alarms.clear(STARTUP_ALARM_NAME);
+        await chrome.alarms.create(STARTUP_ALARM_NAME, {
+            delayInMinutes: 0.05 // ~3 seconds
+        });
     }
 });
 
@@ -261,17 +331,19 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
 
 /**
  * Initialize on extension startup (browser restart)
+ * Uses a short delay alarm to ensure Chrome is fully loaded
  */
 chrome.runtime.onStartup.addListener(async () => {
-    console.log('Extension startup detected');
-    const config = await getConfig();
+    console.log('Extension startup detected - scheduling delayed initialization');
 
-    if (config.autoStartOnBrowserLaunch) {
-        console.log('Auto-start enabled - initializing dashboard');
-        initializeDashboard();
-    } else {
-        console.log('Auto-start disabled - skipping initialization');
-    }
+    // Clear any existing startup alarm
+    await chrome.alarms.clear(STARTUP_ALARM_NAME);
+
+    // Schedule initialization after a short delay (3 seconds)
+    // This gives Chrome time to fully restore windows
+    await chrome.alarms.create(STARTUP_ALARM_NAME, {
+        delayInMinutes: 0.05 // ~3 seconds
+    });
 });
 
 /**
