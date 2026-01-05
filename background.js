@@ -1,6 +1,6 @@
 /**
  * Chrome Tab Rotator - Background Service Worker
- * Manages a dedicated popup window that rotates through dashboard URLs.
+ * Manages a dedicated window that rotates through dashboard URLs.
  * Each URL can have its own rotation interval and reload setting.
  */
 
@@ -17,6 +17,8 @@ async function getConfig() {
     const storedConfig = result[CONFIG_STORAGE_KEY] || {};
 
     return {
+        autoStartOnBrowserLaunch: storedConfig.autoStartOnBrowserLaunch ?? DEFAULT_CONFIG.autoStartOnBrowserLaunch,
+        useExistingWindow: storedConfig.useExistingWindow ?? DEFAULT_CONFIG.useExistingWindow,
         urls: storedConfig.urls || DEFAULT_CONFIG.urls
     };
 }
@@ -67,28 +69,63 @@ async function scheduleNextRotation(urlEntry) {
 }
 
 /**
- * Create the dedicated dashboard window
+ * Take over an existing window instead of creating a new one
  */
-async function createDashboardWindow() {
-    const state = await getState();
-    const config = await getConfig();
+async function takeoverExistingWindow(config) {
+    // Get all windows
+    const windows = await chrome.windows.getAll({ populate: true });
 
-    // Check if window already exists
-    if (await windowExists(state.windowId)) {
-        console.log('Dashboard window already exists');
-        return;
+    if (windows.length === 0) {
+        console.log('No existing windows found');
+        return null;
     }
 
+    // Prefer the focused window, otherwise use the first normal window
+    let targetWindow = windows.find(w => w.focused) ||
+        windows.find(w => w.type === 'normal') ||
+        windows[0];
+
+    // Get the active tab in that window, or the first tab
+    const targetTab = targetWindow.tabs.find(t => t.active) || targetWindow.tabs[0];
+
+    if (!targetTab) {
+        console.log('No tabs found in window');
+        return null;
+    }
+
+    const firstUrl = config.urls[0];
+
+    // Navigate the tab to our first URL
+    await chrome.tabs.update(targetTab.id, { url: firstUrl.url });
+
+    // Save state
+    const newState = {
+        windowId: targetWindow.id,
+        tabId: targetTab.id,
+        currentIndex: 0
+    };
+    await saveState(newState);
+
+    // Schedule first rotation
+    await scheduleNextRotation(firstUrl);
+
+    console.log(`Took over existing window ${targetWindow.id}, tab ${targetTab.id}`);
+    return targetWindow;
+}
+
+/**
+ * Create a new popup window for the dashboard
+ */
+async function createNewWindow(config) {
     const firstUrl = config.urls[0];
 
     // Create new popup window (App Mode - no address bar)
     const window = await chrome.windows.create({
         url: firstUrl.url,
-        type: 'popup',
-        state: 'maximized'
+        type: 'popup'
     });
 
-    // Save the window and tab IDs
+    // Save state
     const newState = {
         windowId: window.id,
         tabId: window.tabs[0].id,
@@ -96,10 +133,35 @@ async function createDashboardWindow() {
     };
     await saveState(newState);
 
-    // Schedule the first rotation based on the first URL's interval
+    // Schedule first rotation
     await scheduleNextRotation(firstUrl);
 
     console.log('Dashboard window created:', window.id);
+    return window;
+}
+
+/**
+ * Initialize the dashboard - either take over existing window or create new
+ */
+async function initializeDashboard() {
+    const state = await getState();
+    const config = await getConfig();
+
+    // Check if we already have a tracked window
+    if (await windowExists(state.windowId)) {
+        console.log('Dashboard window already exists');
+        return;
+    }
+
+    if (config.useExistingWindow) {
+        const window = await takeoverExistingWindow(config);
+        if (!window) {
+            // Fallback to creating new window if takeover failed
+            await createNewWindow(config);
+        }
+    } else {
+        await createNewWindow(config);
+    }
 }
 
 /**
@@ -124,7 +186,7 @@ async function rotateToNextUrl() {
 
         // Optionally recreate the window
         // Uncomment the next line to auto-recreate the window when closed
-        // await createDashboardWindow();
+        // await initializeDashboard();
         return;
     }
 
@@ -158,10 +220,10 @@ async function rotateToNextUrl() {
     } catch (error) {
         console.error('Error rotating URL:', error);
 
-        // Tab might be gone, try to recreate window
+        // Tab might be gone, try to reinitialize
         await stopAlarm();
         await saveState({ windowId: null, tabId: null, currentIndex: 0 });
-        await createDashboardWindow();
+        await initializeDashboard();
     }
 }
 
@@ -200,9 +262,16 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
 /**
  * Initialize on extension startup (browser restart)
  */
-chrome.runtime.onStartup.addListener(() => {
-    console.log('Extension startup - creating dashboard window');
-    createDashboardWindow();
+chrome.runtime.onStartup.addListener(async () => {
+    console.log('Extension startup detected');
+    const config = await getConfig();
+
+    if (config.autoStartOnBrowserLaunch) {
+        console.log('Auto-start enabled - initializing dashboard');
+        initializeDashboard();
+    } else {
+        console.log('Auto-start disabled - skipping initialization');
+    }
 });
 
 /**
@@ -210,5 +279,5 @@ chrome.runtime.onStartup.addListener(() => {
  */
 chrome.runtime.onInstalled.addListener((details) => {
     console.log('Extension installed/updated:', details.reason);
-    createDashboardWindow();
+    initializeDashboard();
 });

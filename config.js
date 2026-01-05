@@ -7,6 +7,8 @@
  * To update settings programmatically (e.g., from a popup UI):
  * chrome.storage.local.set({
  *   rotatorConfig: {
+ *     autoStartOnBrowserLaunch: true,
+ *     useExistingWindow: true,
  *     urls: [
  *       { url: 'https://...', intervalSeconds: 30, reload: false },
  *       { url: 'https://...', intervalSeconds: 60, reload: true }
@@ -17,6 +19,12 @@
 
 // Default configuration values
 export const DEFAULT_CONFIG = {
+    // Whether to automatically open the dashboard window when Chrome starts
+    autoStartOnBrowserLaunch: true,
+
+    // Whether to take over an existing window instead of creating a new popup
+    useExistingWindow: true,
+
     urls: [
         { url: 'https://web.tabliss.io/', intervalSeconds: 5, reload: false },
         { url: 'https://client.pushover.net/', intervalSeconds: 5, reload: false },
