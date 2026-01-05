@@ -155,6 +155,10 @@ async function initializeDashboard() {
         return;
     }
 
+    // Keep display awake to prevent screen dimming/sleep
+    chrome.power.requestKeepAwake('display');
+    console.log('Display keep-awake enabled');
+
     if (config.useExistingWindow) {
         const window = await takeoverExistingWindow(config);
         if (!window) {
@@ -325,6 +329,10 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
         console.log('Dashboard window closed by user');
         await stopAlarm();
         await saveState({ windowId: null, tabId: null, currentIndex: 0 });
+
+        // Release keep-awake when dashboard closes
+        chrome.power.releaseKeepAwake();
+        console.log('Display keep-awake released');
     }
 });
 
