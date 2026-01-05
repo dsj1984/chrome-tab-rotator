@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Chrome Tab Rotator",
+  "version": "1.0.0",
+  "description": "Automatically rotates through dashboard URLs in a dedicated App Mode window",
+  "permissions": [
+    "tabs",
+    "storage",
+    "alarms"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "minimum_chrome_version": "102"
+}
