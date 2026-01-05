@@ -27,6 +27,7 @@ export const DEFAULT_CONFIG = {
 
     urls: [
         { url: 'https://web.tabliss.io/', intervalSeconds: 30, reload: false },
+        { url: 'https://analytics.google.com/analytics/web/#/a376470913p514874294/reports/reportinghub?params=_u..nav%3Dmaui%26_u.dateOption%3Dlast7Days%26_u.comparisonOption%3Ddisabled', intervalSeconds: 15, reload: true },
         { url: 'https://client.pushover.net/', intervalSeconds: 15, reload: true },
         { url: 'https://uptime.betterstack.com/team/t489110/monitors', intervalSeconds: 15, reload: true },
         { url: 'https://finviz.com/map.ashx?t=sec', intervalSeconds: 15, reload: true },
