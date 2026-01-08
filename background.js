@@ -27,10 +27,11 @@ async function getConfig() {
 
 /**
  * Get the current rotator state from storage
+ * visitCounts tracks how many times each URL index has been visited
  */
 async function getState() {
     const result = await chrome.storage.local.get(STATE_STORAGE_KEY);
-    return result[STATE_STORAGE_KEY] || { windowId: null, tabId: null, currentIndex: 0 };
+    return result[STATE_STORAGE_KEY] || { windowId: null, tabId: null, currentIndex: 0, visitCounts: {} };
 }
 
 /**
@@ -224,30 +225,50 @@ async function rotateToNextUrl() {
     }
 
     try {
+        // Track visit count for this URL index
+        const visitCounts = state.visitCounts || {};
+        const currentVisitCount = (visitCounts[nextIndex] || 0) + 1;
+        visitCounts[nextIndex] = currentVisitCount;
+
+        // Determine if we should reload (reloadEveryN: 0=never, 1=always, N=every N visits)
+        // Support both old 'reload' boolean and new 'reloadEveryN' number
+        let reloadEveryN = nextUrlEntry.reloadEveryN;
+        if (reloadEveryN === undefined && typeof nextUrlEntry.reload === 'boolean') {
+            reloadEveryN = nextUrlEntry.reload ? 1 : 0;  // Migration from old format
+        }
+        reloadEveryN = reloadEveryN || 0;
+
+        const shouldReload = reloadEveryN > 0 && (currentVisitCount % reloadEveryN === 0);
+
         // Navigate to the new URL
         console.log('Navigating tab', state.tabId, 'to', nextUrlEntry.url);
-        await chrome.tabs.update(state.tabId, { url: nextUrlEntry.url });
+        console.log(`Visit #${currentVisitCount} for URL index ${nextIndex}, reloadEveryN: ${reloadEveryN}, shouldReload: ${shouldReload}`);
 
-        // Note: reload flag is handled by the fresh navigation above
-        // The chrome.tabs.update already loads the page fresh
-        // If we need cache bypass, we can use bypassCache on the next rotation's reload
-        console.log('Navigation complete, reload setting:', nextUrlEntry.reload);
+        // Add cache-busting parameter if reload is enabled for this visit
+        let urlToNavigate = nextUrlEntry.url;
+        if (shouldReload) {
+            const separator = nextUrlEntry.url.includes('?') ? '&' : '?';
+            urlToNavigate = `${nextUrlEntry.url}${separator}_cb=${Date.now()}`;
+            console.log('Cache-busting URL:', urlToNavigate);
+        }
 
-        // Update state
-        const newState = { ...state, currentIndex: nextIndex };
+        await chrome.tabs.update(state.tabId, { url: urlToNavigate });
+
+        // Update state with new index and visit counts
+        const newState = { ...state, currentIndex: nextIndex, visitCounts: visitCounts };
         await saveState(newState);
         console.log('State saved:', JSON.stringify(newState));
 
         // Schedule next rotation based on this URL's interval
         await scheduleNextRotation(nextUrlEntry);
 
-        console.log(`Rotated to URL ${nextIndex + 1}/${config.urls.length}: ${nextUrlEntry.url} (interval: ${nextUrlEntry.intervalSeconds}s, reload: ${nextUrlEntry.reload})`);
+        console.log(`Rotated to URL ${nextIndex + 1}/${config.urls.length}: ${nextUrlEntry.url} (interval: ${nextUrlEntry.intervalSeconds}s, reloadEveryN: ${reloadEveryN}, visit: ${currentVisitCount})`);
     } catch (error) {
         console.error('Error rotating URL:', error);
 
         // Tab might be gone, try to reinitialize
         await stopAlarm();
-        await saveState({ windowId: null, tabId: null, currentIndex: 0 });
+        await saveState({ windowId: null, tabId: null, currentIndex: 0, visitCounts: {} });
         await initializeDashboard();
     }
 }

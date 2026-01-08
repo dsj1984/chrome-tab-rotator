@@ -57,8 +57,10 @@
           <span>sec</span>
         </label>
         <label class="option">
-          <input type="checkbox" class="reload-checkbox">
-          <span>Reload on switch</span>
+          <span>Reload every</span>
+          <input type="number" class="reload-input" min="0" max="100" value="0"
+            title="0 = never reload, 1 = every visit, N = every N visits">
+          <span>visits</span>
         </label>
       </div>
     </div>

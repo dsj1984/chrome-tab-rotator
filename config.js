@@ -26,15 +26,15 @@ export const DEFAULT_CONFIG = {
     useExistingWindow: true,
 
     urls: [
-        { url: 'https://web.tabliss.io/', intervalSeconds: 30, reload: false },
-        { url: 'https://analytics.google.com/analytics/web/#/a376470913p514874294/reports/reportinghub?params=_u..nav%3Dmaui%26_u.dateOption%3Dlast7Days%26_u.comparisonOption%3Ddisabled', intervalSeconds: 15, reload: true },
-        { url: 'https://client.pushover.net/', intervalSeconds: 15, reload: true },
-        { url: 'https://uptime.betterstack.com/team/t489110/monitors', intervalSeconds: 15, reload: true },
-        { url: 'https://finviz.com/map.ashx?t=sec', intervalSeconds: 15, reload: true },
-        { url: 'https://stockanalysis.com/chart/VTI/', intervalSeconds: 15, reload: true },
-        { url: 'https://text.npr.org/', intervalSeconds: 30, reload: true },
-        { url: 'https://embed.windy.com/embed2.html?lat=42.973&lon=-73.827&zoom=8&level=surface&overlay=radar&menu=&message=&marker=&calendar=now&pressure=true&type=map&location=coordinates&detail=&metricTemp=°F&metricRain=in&metricWind=mph&radarRange=-1', intervalSeconds: 15, reload: false },
-        { url: 'https://embed.windy.com/embed2.html?lat=42.973&lon=-73.827&zoom=8&level=surface&overlay=snowAccu&menu=&message=&marker=&calendar=now&pressure=true&type=map&location=coordinates&detail=&metricTemp=°F&metricRain=in&metricWind=mph', intervalSeconds: 15, reload: false }
+        { url: 'https://web.tabliss.io/', intervalSeconds: 30, reloadEveryN: 0 },
+        { url: 'https://analytics.google.com/analytics/web/#/a376470913p514874294/reports/reportinghub?params=_u..nav%3Dmaui%26_u.dateOption%3Dlast7Days%26_u.comparisonOption%3Ddisabled', intervalSeconds: 15, reloadEveryN: 1 },
+        { url: 'https://client.pushover.net/', intervalSeconds: 15, reloadEveryN: 1 },
+        { url: 'https://uptime.betterstack.com/team/t489110/monitors', intervalSeconds: 15, reloadEveryN: 1 },
+        { url: 'https://finviz.com/map.ashx?t=sec', intervalSeconds: 15, reloadEveryN: 1 },
+        { url: 'https://stockanalysis.com/chart/VTI/', intervalSeconds: 15, reloadEveryN: 1 },
+        { url: 'https://text.npr.org/', intervalSeconds: 30, reloadEveryN: 1 },
+        { url: 'https://embed.windy.com/embed2.html?lat=42.973&lon=-73.827&zoom=8&level=surface&overlay=radar&menu=&message=&marker=&calendar=now&pressure=true&type=map&location=coordinates&detail=&metricTemp=°F&metricRain=in&metricWind=mph&radarRange=-1', intervalSeconds: 15, reloadEveryN: 0 },
+        { url: 'https://embed.windy.com/embed2.html?lat=42.973&lon=-73.827&zoom=8&level=surface&overlay=snowAccu&menu=&message=&marker=&calendar=now&pressure=true&type=map&location=coordinates&detail=&metricTemp=°F&metricRain=in&metricWind=mph', intervalSeconds: 15, reloadEveryN: 0 }
     ]
 };
 

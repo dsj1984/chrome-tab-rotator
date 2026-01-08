@@ -42,19 +42,24 @@ function updateUrlCount() {
 /**
  * Create a URL item element from the template
  */
-function createUrlItem(urlEntry = { url: '', intervalSeconds: 30, reload: false }) {
+function createUrlItem(urlEntry = { url: '', intervalSeconds: 30, reloadEveryN: 0 }) {
     const template = urlItemTemplate.content.cloneNode(true);
     const item = template.querySelector('.url-item');
 
     const dragHandle = item.querySelector('.drag-handle');
     const urlInput = item.querySelector('.url-input');
     const intervalInput = item.querySelector('.interval-input');
-    const reloadCheckbox = item.querySelector('.reload-checkbox');
+    const reloadInput = item.querySelector('.reload-input');
     const deleteBtn = item.querySelector('.btn-delete');
 
     urlInput.value = urlEntry.url;
     intervalInput.value = urlEntry.intervalSeconds;
-    reloadCheckbox.checked = urlEntry.reload;
+    // Support migration from old boolean reload to new reloadEveryN
+    if (typeof urlEntry.reload === 'boolean') {
+        reloadInput.value = urlEntry.reload ? 1 : 0;
+    } else {
+        reloadInput.value = urlEntry.reloadEveryN ?? 0;
+    }
 
     // Delete button handler
     deleteBtn.addEventListener('click', () => {
@@ -151,7 +156,7 @@ function collectConfig() {
             urls.push({
                 url: url,
                 intervalSeconds: parseInt(item.querySelector('.interval-input').value) || 30,
-                reload: item.querySelector('.reload-checkbox').checked
+                reloadEveryN: parseInt(item.querySelector('.reload-input').value) || 0
             });
         }
     });

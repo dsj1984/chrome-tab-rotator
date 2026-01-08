@@ -240,6 +240,21 @@ header h1 {
   border-color: var(--accent);
 }
 
+.reload-input {
+  width: 50px;
+  padding: 4px 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.reload-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .option input[type="checkbox"] {
   accent-color: var(--accent);
   width: 16px;
