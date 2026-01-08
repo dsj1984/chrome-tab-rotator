@@ -25,6 +25,10 @@ export const DEFAULT_CONFIG = {
     // Whether to take over an existing window instead of creating a new popup
     useExistingWindow: true,
 
+    // Whether to pre-load all URLs in separate tabs for instant switching
+    // When false, uses single tab and navigates between URLs (slower but less memory)
+    preloadTabs: true,
+
     urls: [
         { url: 'https://web.tabliss.io/', intervalSeconds: 30, reloadEveryN: 0 },
         { url: 'https://analytics.google.com/analytics/web/#/a376470913p514874294/reports/reportinghub?params=_u..nav%3Dmaui%26_u.dateOption%3Dlast7Days%26_u.comparisonOption%3Ddisabled', intervalSeconds: 15, reloadEveryN: 1 },

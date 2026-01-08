@@ -12,6 +12,7 @@ let draggedItem = null;
 // DOM Elements
 const autoStartCheckbox = document.getElementById('autoStart');
 const useExistingCheckbox = document.getElementById('useExisting');
+const preloadTabsCheckbox = document.getElementById('preloadTabs');
 const urlListContainer = document.getElementById('urlList');
 const urlCountSpan = document.getElementById('urlCount');
 const addUrlBtn = document.getElementById('addUrl');
@@ -130,6 +131,7 @@ async function loadConfig() {
     // Set general settings
     autoStartCheckbox.checked = config.autoStartOnBrowserLaunch ?? DEFAULT_CONFIG.autoStartOnBrowserLaunch;
     useExistingCheckbox.checked = config.useExistingWindow ?? DEFAULT_CONFIG.useExistingWindow;
+    preloadTabsCheckbox.checked = config.preloadTabs ?? DEFAULT_CONFIG.preloadTabs;
 
     // Clear existing URL items
     urlListContainer.innerHTML = '';
@@ -164,6 +166,7 @@ function collectConfig() {
     return {
         autoStartOnBrowserLaunch: autoStartCheckbox.checked,
         useExistingWindow: useExistingCheckbox.checked,
+        preloadTabs: preloadTabsCheckbox.checked,
         urls: urls
     };
 }

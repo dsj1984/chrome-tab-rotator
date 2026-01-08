@@ -21,6 +21,7 @@ async function getConfig() {
     return {
         autoStartOnBrowserLaunch: storedConfig.autoStartOnBrowserLaunch ?? DEFAULT_CONFIG.autoStartOnBrowserLaunch,
         useExistingWindow: storedConfig.useExistingWindow ?? DEFAULT_CONFIG.useExistingWindow,
+        preloadTabs: storedConfig.preloadTabs ?? DEFAULT_CONFIG.preloadTabs,
         urls: storedConfig.urls || DEFAULT_CONFIG.urls
     };
 }
@@ -28,10 +29,19 @@ async function getConfig() {
 /**
  * Get the current rotator state from storage
  * visitCounts tracks how many times each URL index has been visited
+ * tabIds stores all tab IDs when using preload mode
+ * preloadMode indicates if current session is using preload tabs
  */
 async function getState() {
     const result = await chrome.storage.local.get(STATE_STORAGE_KEY);
-    return result[STATE_STORAGE_KEY] || { windowId: null, tabId: null, currentIndex: 0, visitCounts: {} };
+    return result[STATE_STORAGE_KEY] || {
+        windowId: null,
+        tabId: null,
+        tabIds: [], // Array of tab IDs for preload mode
+        currentIndex: 0,
+        visitCounts: {},
+        preloadMode: false
+    };
 }
 
 /**
@@ -132,7 +142,10 @@ async function createNewWindow(config) {
     const newState = {
         windowId: window.id,
         tabId: window.tabs[0].id,
-        currentIndex: 0
+        tabIds: [],
+        currentIndex: 0,
+        visitCounts: {},
+        preloadMode: false
     };
     await saveState(newState);
 
@@ -144,7 +157,118 @@ async function createNewWindow(config) {
 }
 
 /**
+ * Create a new popup window with all URLs preloaded in separate tabs
+ * This enables instant switching between URLs
+ */
+async function createPreloadedWindow(config) {
+    // Create window with first URL
+    const window = await chrome.windows.create({
+        url: config.urls[0].url,
+        type: 'popup'
+    });
+
+    const tabIds = [window.tabs[0].id];
+    console.log(`Created preload window ${window.id} with first tab ${tabIds[0]}`);
+
+    // Create additional tabs for remaining URLs
+    for (let i = 1; i < config.urls.length; i++) {
+        try {
+            const tab = await chrome.tabs.create({
+                windowId: window.id,
+                url: config.urls[i].url,
+                active: false // Keep first tab active
+            });
+            tabIds.push(tab.id);
+            console.log(`Created preload tab ${i}: ${tab.id} for ${config.urls[i].url}`);
+        } catch (error) {
+            console.error(`Failed to create tab ${i}:`, error);
+        }
+    }
+
+    // Save state with all tab IDs
+    const newState = {
+        windowId: window.id,
+        tabId: tabIds[0], // Active tab
+        tabIds: tabIds,
+        currentIndex: 0,
+        visitCounts: {},
+        preloadMode: true
+    };
+    await saveState(newState);
+
+    // Schedule first rotation
+    await scheduleNextRotation(config.urls[0]);
+
+    console.log(`Preloaded window created with ${tabIds.length} tabs:`, tabIds);
+    return window;
+}
+
+/**
+ * Take over an existing window and preload all URLs in separate tabs
+ */
+async function takeoverExistingWindowPreload(config) {
+    // Get all windows
+    const windows = await chrome.windows.getAll({ populate: true });
+
+    if (windows.length === 0) {
+        console.log('No existing windows found for preload takeover');
+        return null;
+    }
+
+    // Prefer the focused window, otherwise use the first normal window
+    let targetWindow = windows.find(w => w.focused) ||
+        windows.find(w => w.type === 'normal') ||
+        windows[0];
+
+    // Get the active tab in that window to use as first tab
+    const firstTab = targetWindow.tabs.find(t => t.active) || targetWindow.tabs[0];
+
+    if (!firstTab) {
+        console.log('No tabs found in window');
+        return null;
+    }
+
+    // Navigate first tab to first URL
+    await chrome.tabs.update(firstTab.id, { url: config.urls[0].url });
+    const tabIds = [firstTab.id];
+    console.log(`Took over window ${targetWindow.id}, first tab ${firstTab.id}`);
+
+    // Create additional tabs for remaining URLs
+    for (let i = 1; i < config.urls.length; i++) {
+        try {
+            const tab = await chrome.tabs.create({
+                windowId: targetWindow.id,
+                url: config.urls[i].url,
+                active: false
+            });
+            tabIds.push(tab.id);
+            console.log(`Created preload tab ${i}: ${tab.id} for ${config.urls[i].url}`);
+        } catch (error) {
+            console.error(`Failed to create tab ${i}:`, error);
+        }
+    }
+
+    // Save state with all tab IDs
+    const newState = {
+        windowId: targetWindow.id,
+        tabId: tabIds[0],
+        tabIds: tabIds,
+        currentIndex: 0,
+        visitCounts: {},
+        preloadMode: true
+    };
+    await saveState(newState);
+
+    // Schedule first rotation
+    await scheduleNextRotation(config.urls[0]);
+
+    console.log(`Preload takeover complete with ${tabIds.length} tabs:`, tabIds);
+    return targetWindow;
+}
+
+/**
  * Initialize the dashboard - either take over existing window or create new
+ * Uses preload mode if enabled for instant tab switching
  */
 async function initializeDashboard() {
     const state = await getState();
@@ -160,6 +284,24 @@ async function initializeDashboard() {
     chrome.power.requestKeepAwake('display');
     console.log('Display keep-awake enabled');
 
+    // Use preload mode if enabled (creates all tabs upfront)
+    if (config.preloadTabs) {
+        console.log('Using preload mode - creating all tabs upfront');
+
+        // Try to use existing window if setting is enabled
+        if (config.useExistingWindow) {
+            const window = await takeoverExistingWindowPreload(config);
+            if (window) {
+                return;
+            }
+            console.log('Could not take over existing window, creating new one');
+        }
+
+        await createPreloadedWindow(config);
+        return;
+    }
+
+    // Standard mode - single tab navigation
     if (config.useExistingWindow) {
         const window = await takeoverExistingWindow(config);
         if (!window) {
@@ -181,6 +323,8 @@ async function stopAlarm() {
 
 /**
  * Rotate to the next URL
+ * In preload mode: switches to the next pre-loaded tab (instant)
+ * In standard mode: navigates single tab to next URL
  */
 async function rotateToNextUrl() {
     const state = await getState();
@@ -190,15 +334,12 @@ async function rotateToNextUrl() {
     console.log('Current state:', JSON.stringify(state));
     console.log('Config URLs count:', config.urls.length);
     console.log('Current index:', state.currentIndex);
+    console.log('Preload mode:', state.preloadMode);
 
     // Check if window still exists
     if (!(await windowExists(state.windowId))) {
         console.log('Dashboard window was closed, stopping rotation');
         await stopAlarm();
-
-        // Optionally recreate the window
-        // Uncomment the next line to auto-recreate the window when closed
-        // await initializeDashboard();
         return;
     }
 
@@ -215,15 +356,6 @@ async function rotateToNextUrl() {
         return;
     }
 
-    // Send fade-out message to content script for smooth transition (non-blocking)
-    try {
-        await chrome.tabs.sendMessage(state.tabId, { action: 'fadeOut' });
-        console.log('Fade-out complete');
-    } catch (e) {
-        // Content script may not be loaded (e.g., chrome:// pages, new tabs)
-        console.log('Could not send fade message (expected on some pages)');
-    }
-
     try {
         // Track visit count for this URL index
         const visitCounts = state.visitCounts || {};
@@ -231,7 +363,6 @@ async function rotateToNextUrl() {
         visitCounts[nextIndex] = currentVisitCount;
 
         // Determine if we should reload (reloadEveryN: 0=never, 1=always, N=every N visits)
-        // Support both old 'reload' boolean and new 'reloadEveryN' number
         let reloadEveryN = nextUrlEntry.reloadEveryN;
         if (reloadEveryN === undefined && typeof nextUrlEntry.reload === 'boolean') {
             reloadEveryN = nextUrlEntry.reload ? 1 : 0;  // Migration from old format
@@ -239,25 +370,61 @@ async function rotateToNextUrl() {
         reloadEveryN = reloadEveryN || 0;
 
         const shouldReload = reloadEveryN > 0 && (currentVisitCount % reloadEveryN === 0);
-
-        // Navigate to the new URL
-        console.log('Navigating tab', state.tabId, 'to', nextUrlEntry.url);
         console.log(`Visit #${currentVisitCount} for URL index ${nextIndex}, reloadEveryN: ${reloadEveryN}, shouldReload: ${shouldReload}`);
 
-        // Add cache-busting parameter if reload is enabled for this visit
-        let urlToNavigate = nextUrlEntry.url;
-        if (shouldReload) {
-            const separator = nextUrlEntry.url.includes('?') ? '&' : '?';
-            urlToNavigate = `${nextUrlEntry.url}${separator}_cb=${Date.now()}`;
-            console.log('Cache-busting URL:', urlToNavigate);
+        // === PRELOAD MODE: Switch between existing tabs ===
+        if (state.preloadMode && state.tabIds && state.tabIds.length > 0) {
+            const nextTabId = state.tabIds[nextIndex];
+
+            if (!nextTabId) {
+                console.error('ERROR: No tab ID found for index', nextIndex);
+                return;
+            }
+
+            // Activate the next tab (instant switch!)
+            await chrome.tabs.update(nextTabId, { active: true });
+            console.log(`PRELOAD MODE: Switched to tab ${nextTabId} (instant)`);
+
+            // Reload the tab if needed (based on reloadEveryN)
+            if (shouldReload) {
+                await chrome.tabs.reload(nextTabId, { bypassCache: true });
+                console.log(`Reloaded tab ${nextTabId} (visit #${currentVisitCount}, reloadEveryN: ${reloadEveryN})`);
+            }
+
+            // Update state
+            const newState = {
+                ...state,
+                tabId: nextTabId,
+                currentIndex: nextIndex,
+                visitCounts: visitCounts
+            };
+            await saveState(newState);
+
+        } else {
+            // === STANDARD MODE: Navigate single tab ===
+            // Send fade-out message to content script for smooth transition
+            try {
+                await chrome.tabs.sendMessage(state.tabId, { action: 'fadeOut' });
+                console.log('Fade-out complete');
+            } catch (e) {
+                console.log('Could not send fade message (expected on some pages)');
+            }
+
+            // Add cache-busting parameter if reload is enabled for this visit
+            let urlToNavigate = nextUrlEntry.url;
+            if (shouldReload) {
+                const separator = nextUrlEntry.url.includes('?') ? '&' : '?';
+                urlToNavigate = `${nextUrlEntry.url}${separator}_cb=${Date.now()}`;
+                console.log('Cache-busting URL:', urlToNavigate);
+            }
+
+            await chrome.tabs.update(state.tabId, { url: urlToNavigate });
+            console.log('STANDARD MODE: Navigated tab', state.tabId, 'to', nextUrlEntry.url);
+
+            // Update state
+            const newState = { ...state, currentIndex: nextIndex, visitCounts: visitCounts };
+            await saveState(newState);
         }
-
-        await chrome.tabs.update(state.tabId, { url: urlToNavigate });
-
-        // Update state with new index and visit counts
-        const newState = { ...state, currentIndex: nextIndex, visitCounts: visitCounts };
-        await saveState(newState);
-        console.log('State saved:', JSON.stringify(newState));
 
         // Schedule next rotation based on this URL's interval
         await scheduleNextRotation(nextUrlEntry);
@@ -268,7 +435,7 @@ async function rotateToNextUrl() {
 
         // Tab might be gone, try to reinitialize
         await stopAlarm();
-        await saveState({ windowId: null, tabId: null, currentIndex: 0, visitCounts: {} });
+        await saveState({ windowId: null, tabId: null, tabIds: [], currentIndex: 0, visitCounts: {}, preloadMode: false });
         await initializeDashboard();
     }
 }
