@@ -25,8 +25,15 @@
     }
   ],
   "minimum_chrome_version": "102",
+  "icons": {
+    "16": "icon.svg",
+    "32": "icon.svg",
+    "48": "icon.svg",
+    "128": "icon.svg"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Tab Rotator Settings"
+    "default_title": "Tab Rotator Settings",
+    "default_icon": "icon.svg"
   }
 }
