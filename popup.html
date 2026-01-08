@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=400">
+  <title>Tab Rotator Settings</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔄 Tab Rotator</h1>
+      <p class="subtitle">Configure your dashboard rotation</p>
+    </header>
+
+    <section class="settings-section">
+      <h2>General Settings</h2>
+      <label class="toggle-row">
+        <span>Auto-start on browser launch</span>
+        <input type="checkbox" id="autoStart" checked>
+        <span class="toggle-slider"></span>
+      </label>
+      <label class="toggle-row">
+        <span>Use existing window</span>
+        <input type="checkbox" id="useExisting" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </section>
+
+    <section class="settings-section">
+      <h2>URLs <span class="url-count" id="urlCount">(0)</span></h2>
+      <div id="urlList" class="url-list"></div>
+      <button id="addUrl" class="btn btn-add">+ Add URL</button>
+    </section>
+
+    <footer class="actions">
+      <button id="saveBtn" class="btn btn-primary">Save Settings</button>
+      <button id="resetBtn" class="btn btn-secondary">Reset to Defaults</button>
+    </footer>
+
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <template id="urlItemTemplate">
+    <div class="url-item">
+      <div class="url-header">
+        <input type="text" class="url-input" placeholder="https://example.com" required>
+        <button class="btn-icon btn-delete" title="Remove URL">×</button>
+      </div>
+      <div class="url-options">
+        <label class="option">
+          <span>Interval:</span>
+          <input type="number" class="interval-input" min="5" max="3600" value="30">
+          <span>sec</span>
+        </label>
+        <label class="option">
+          <input type="checkbox" class="reload-checkbox">
+          <span>Reload on switch</span>
+        </label>
+      </div>
+    </div>
+  </template>
+
+  <script src="popup.js"></script>
+</body>
+</html>
