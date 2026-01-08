@@ -228,17 +228,10 @@ async function rotateToNextUrl() {
         console.log('Navigating tab', state.tabId, 'to', nextUrlEntry.url);
         await chrome.tabs.update(state.tabId, { url: nextUrlEntry.url });
 
-        // If reload is enabled for this URL, reload after navigation
-        if (nextUrlEntry.reload) {
-            // Small delay to ensure navigation completes, then reload
-            setTimeout(async () => {
-                try {
-                    await chrome.tabs.reload(state.tabId);
-                } catch (e) {
-                    console.log('Reload failed:', e);
-                }
-            }, 500);
-        }
+        // Note: reload flag is handled by the fresh navigation above
+        // The chrome.tabs.update already loads the page fresh
+        // If we need cache bypass, we can use bypassCache on the next rotation's reload
+        console.log('Navigation complete, reload setting:', nextUrlEntry.reload);
 
         // Update state
         const newState = { ...state, currentIndex: nextIndex };
