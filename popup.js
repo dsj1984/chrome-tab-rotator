@@ -4,16 +4,10 @@
  * Settings are per-profile since we use local storage
  */
 
-const CONFIG_STORAGE_KEY = 'rotatorConfig';
+import { DEFAULT_CONFIG, CONFIG_STORAGE_KEY } from './config.js';
 
-// Default configuration (matches config.js)
-const DEFAULT_CONFIG = {
-    autoStartOnBrowserLaunch: true,
-    useExistingWindow: true,
-    urls: [
-        { url: 'https://web.tabliss.io/', intervalSeconds: 30, reload: false }
-    ]
-};
+// Drag and drop state
+let draggedItem = null;
 
 // DOM Elements
 const autoStartCheckbox = document.getElementById('autoStart');
@@ -52,6 +46,7 @@ function createUrlItem(urlEntry = { url: '', intervalSeconds: 30, reload: false 
     const template = urlItemTemplate.content.cloneNode(true);
     const item = template.querySelector('.url-item');
 
+    const dragHandle = item.querySelector('.drag-handle');
     const urlInput = item.querySelector('.url-input');
     const intervalInput = item.querySelector('.interval-input');
     const reloadCheckbox = item.querySelector('.reload-checkbox');
@@ -61,12 +56,60 @@ function createUrlItem(urlEntry = { url: '', intervalSeconds: 30, reload: false 
     intervalInput.value = urlEntry.intervalSeconds;
     reloadCheckbox.checked = urlEntry.reload;
 
+    // Delete button handler
     deleteBtn.addEventListener('click', () => {
         item.style.animation = 'slideIn 0.2s ease-out reverse';
         setTimeout(() => {
             item.remove();
             updateUrlCount();
         }, 180);
+    });
+
+    // Drag and drop handlers
+    item.setAttribute('draggable', 'true');
+
+    item.addEventListener('dragstart', (e) => {
+        draggedItem = item;
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+
+    item.addEventListener('dragend', () => {
+        draggedItem = null;
+        item.classList.remove('dragging');
+        // Remove all drag-over classes
+        document.querySelectorAll('.url-item').forEach(el => {
+            el.classList.remove('drag-over');
+        });
+    });
+
+    item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (draggedItem && draggedItem !== item) {
+            item.classList.add('drag-over');
+        }
+    });
+
+    item.addEventListener('dragleave', () => {
+        item.classList.remove('drag-over');
+    });
+
+    item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.classList.remove('drag-over');
+
+        if (draggedItem && draggedItem !== item) {
+            const allItems = [...urlListContainer.querySelectorAll('.url-item')];
+            const draggedIndex = allItems.indexOf(draggedItem);
+            const dropIndex = allItems.indexOf(item);
+
+            if (draggedIndex < dropIndex) {
+                item.parentNode.insertBefore(draggedItem, item.nextSibling);
+            } else {
+                item.parentNode.insertBefore(draggedItem, item);
+            }
+        }
     });
 
     return item;
