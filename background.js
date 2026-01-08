@@ -185,6 +185,11 @@ async function rotateToNextUrl() {
     const state = await getState();
     const config = await getConfig();
 
+    console.log('=== ROTATION DEBUG ===');
+    console.log('Current state:', JSON.stringify(state));
+    console.log('Config URLs count:', config.urls.length);
+    console.log('Current index:', state.currentIndex);
+
     // Check if window still exists
     if (!(await windowExists(state.windowId))) {
         console.log('Dashboard window was closed, stopping rotation');
@@ -200,6 +205,15 @@ async function rotateToNextUrl() {
     const nextIndex = (state.currentIndex + 1) % config.urls.length;
     const nextUrlEntry = config.urls[nextIndex];
 
+    console.log('Next index:', nextIndex);
+    console.log('Next URL:', nextUrlEntry?.url);
+
+    if (!nextUrlEntry) {
+        console.error('ERROR: No URL entry found at index', nextIndex);
+        console.log('Config URLs:', JSON.stringify(config.urls));
+        return;
+    }
+
     // Send fade-out message to content script for smooth transition (non-blocking)
     try {
         await chrome.tabs.sendMessage(state.tabId, { action: 'fadeOut' });
@@ -211,6 +225,7 @@ async function rotateToNextUrl() {
 
     try {
         // Navigate to the new URL
+        console.log('Navigating tab', state.tabId, 'to', nextUrlEntry.url);
         await chrome.tabs.update(state.tabId, { url: nextUrlEntry.url });
 
         // If reload is enabled for this URL, reload after navigation
@@ -226,7 +241,9 @@ async function rotateToNextUrl() {
         }
 
         // Update state
-        await saveState({ ...state, currentIndex: nextIndex });
+        const newState = { ...state, currentIndex: nextIndex };
+        await saveState(newState);
+        console.log('State saved:', JSON.stringify(newState));
 
         // Schedule next rotation based on this URL's interval
         await scheduleNextRotation(nextUrlEntry);
